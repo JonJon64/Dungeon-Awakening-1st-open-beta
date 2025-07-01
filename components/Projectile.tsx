@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { ProjectileState } from '../types';
 
@@ -46,11 +47,16 @@ const Projectile: React.FC<ProjectileProps> = ({ projectileState }) => {
         style.boxShadow = '0 0 8px rgba(0,255,255,0.9), 0 0 12px rgba(100,100,255,0.7)';
         style.width = '12px';
         style.height = '12px';
+    } else if (spellType === 'explosion') {
+        className += " bg-yellow-400";
+        style.boxShadow = '0 0 10px rgba(255,255,0,0.9), 0 0 15px rgba(255,165,0,0.7)';
+        style.width = '14px';
+        style.height = '14px';
     }
   } else {
     // Enemy projectile
-    className += " bg-yellow-300";
-    style.boxShadow = '0 0 6px rgba(255,255,0,0.9)';
+    className += " bg-red-500";
+    style.boxShadow = '0 0 6px rgba(255,0,0,0.9)';
   }
 
   return (

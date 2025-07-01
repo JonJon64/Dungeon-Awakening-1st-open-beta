@@ -1,7 +1,6 @@
-import React, { useState } from 'react';
-import type { PlayerState } from '../types';
 
-export type RedChestUpgradeType = 'knowledge' | 'magic' | 'renegade' | 'resistant' | 'corredor' | 'luck' | 'piercingArrows' | 'economy' | 'necromancerUpgrade';
+import React, { useState } from 'react';
+import type { PlayerState, RedChestUpgradeType, WavePlayerState } from '../types';
 
 interface RedChestUpgradeModalProps {
   onConfirm: (upgrade: RedChestUpgradeType) => void;
@@ -12,25 +11,43 @@ interface RedChestUpgradeModalProps {
 const RedChestUpgradeModal: React.FC<RedChestUpgradeModalProps> = ({ onConfirm, onClose, playerState }) => {
   const [selected, setSelected] = useState<RedChestUpgradeType | null>(null);
 
+  const isWaveMode = 'points' in playerState;
+  const wavePlayerState = playerState as WavePlayerState;
+
   const upgrades: { type: RedChestUpgradeType; title: string; description: string; disabled: boolean; }[] = [
-    { type: 'knowledge', title: '+3% Conhecimento', description: `Chance de negar dano recebido. (Atual: ${playerState.knowledge}%, Máx: 30%)`, disabled: playerState.knowledge >= 30 },
+    { type: 'knowledge', title: '+3% Conhecimento', description: `Chance de negar/refletir dano. (Atual: ${playerState.knowledge}%, Máx: ${isWaveMode ? '40%' : '30%'})`, disabled: playerState.knowledge >= (isWaveMode ? 40 : 30) },
     { type: 'magic', title: '+5% Magia', description: `Desbloqueia e aprimora poderes mágicos. (Atual: ${playerState.magic}%)`, disabled: playerState.magic >= 100 },
-    { type: 'renegade', title: '+5% Renegado', description: `Chance de distribuir dano recebido. (Atual: ${playerState.renegade}%, Máx: 30%)`, disabled: playerState.renegade >= 30 },
+    { type: 'renegade', title: '+5% Renegado', description: `Chance de distribuir dano recebido. (Atual: ${playerState.renegade}%, Máx: ${isWaveMode ? '40%' : '30%'})`, disabled: playerState.renegade >= (isWaveMode ? 40 : 30) },
     { type: 'resistant', title: 'Resistência', description: 'Melhora o escudo (duração e recarga). (Uso único)', disabled: playerState.resistant },
-    { type: 'corredor', title: '+25 Estamina Máxima', description: `Aumenta seu vigor máximo. (Atual: ${playerState.maxStamina} / 300)`, disabled: playerState.maxStamina >= 300 },
+    { type: 'corredor', title: `+${isWaveMode ? '50' : '25'} Estamina Máxima`, description: `Aumenta seu vigor máximo. (Atual: ${playerState.maxStamina} / ${isWaveMode ? '450' : '300'})`, disabled: playerState.maxStamina >= (isWaveMode ? 450 : 300) },
     { type: 'luck', title: 'Sorte', description: 'Aumenta chance de flecha (40%) e nº de inimigos no estágio 2. (Uso único)', disabled: playerState.luck },
-    { type: 'piercingArrows', title: 'Flecha Perfurante', description: 'Flechas atravessam 7 inimigos (dano 2.5) e os empurram. (Uso único)', disabled: playerState.piercingArrows },
+    { type: 'piercingArrows', title: 'Flecha Perfurante', description: `Flechas perfuram até ${isWaveMode ? 15 : 7} inimigos. (Uso único)`, disabled: playerState.piercingArrows },
     { type: 'economy', title: '+12% Economia de Mana', description: `Reduz custo de mana. (Atual: ${Math.round(playerState.manaCostReduction * 100)}%, Máx: 36%)`, disabled: playerState.manaCostReduction >= 0.36 },
   ];
+  
+  if (isWaveMode) {
+    upgrades.push({ type: 'doublePoints', title: 'Pontos em Dobro', description: `Multiplica pontos por 2x. Acumula até 3x (2x/4x/6x). (Nível: ${wavePlayerState.doublePointsLevel}/3)`, disabled: wavePlayerState.doublePointsLevel >= 3 });
+  }
 
   if (playerState.availableSpells.includes('necromancer')) {
+    const maxLevel = isWaveMode ? 5 : 2;
     upgrades.push({
       type: 'necromancerUpgrade',
       title: 'Necromante',
-      description: `Aumenta +1 aliado por uso, duplica vida e dano dos aliados. (Nível ${playerState.necromancerLevel}/2)`,
-      disabled: playerState.necromancerLevel >= 2,
+      description: `Aumenta +1 aliado por uso, duplica vida e dano dos aliados. (Nível ${playerState.necromancerLevel}/${maxLevel})`,
+      disabled: playerState.necromancerLevel >= maxLevel,
     });
   }
+
+  if (isWaveMode && playerState.availableSpells.includes('explosion')) {
+    upgrades.push({
+      type: 'pinguinRico',
+      title: 'Pinguin Rico',
+      description: 'Melhora a magia Explosão, dobrando o raio e o dano, mas reduzindo a duração. (Uso único)',
+      disabled: playerState.pinguinRicoLevel > 0,
+    });
+  }
+
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">

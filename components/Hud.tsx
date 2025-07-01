@@ -1,5 +1,5 @@
 import React from 'react';
-import type { GameState, SpellType } from '../types';
+import type { GameState, SpellType, PrimaryWeapon } from '../types';
 
 interface HudProps {
   lives: number;
@@ -7,13 +7,15 @@ interface HudProps {
   maxStamina: number;
   mana: number;
   maxMana: number;
-  selectedSpell: 'fire' | 'ice' | 'necromancer' | 'blessing' | null;
+  selectedSpell: 'fire' | 'ice' | 'necromancer' | 'blessing' | 'explosion' | 'magic_shield' | null;
   room: number;
   kills: number;
   shield: GameState['shield'];
   shieldCooldownTimer: number;
   hasBow: boolean;
   arrows: number;
+  hasAxe: boolean;
+  equippedWeapon: PrimaryWeapon;
 }
 
 const renderHeartRow = (lives: number, row: number) => {
@@ -37,7 +39,7 @@ const renderHeartRow = (lives: number, row: number) => {
 };
 
 
-const Hud: React.FC<HudProps> = ({ lives, stamina, maxStamina, mana, maxMana, selectedSpell, room, kills, shield, shieldCooldownTimer, hasBow, arrows }) => {
+const Hud: React.FC<HudProps> = ({ lives, stamina, maxStamina, mana, maxMana, selectedSpell, room, kills, shield, shieldCooldownTimer, hasBow, arrows, hasAxe, equippedWeapon }) => {
   const renderHearts = () => {
     return (
         <div className="flex flex-col">
@@ -56,6 +58,8 @@ const Hud: React.FC<HudProps> = ({ lives, stamina, maxStamina, mana, maxMana, se
         case 'ice': icon = '❄️'; break;
         case 'necromancer': icon = '💀'; break;
         case 'blessing': icon = '💖'; break;
+        case 'explosion': icon = '💥'; break;
+        case 'magic_shield': icon = '🔵'; break;
         default: return null;
     }
     return <span className="text-2xl filter drop-shadow-[0_0_4px_#fff]">{icon}</span>;
@@ -80,6 +84,13 @@ const Hud: React.FC<HudProps> = ({ lives, stamina, maxStamina, mana, maxMana, se
           </div>
         )}
         <div className="mt-2 flex items-center gap-4">
+            {hasAxe && (
+               <div className="flex items-center gap-2 text-white">
+                    <span className="text-2xl filter drop-shadow-[0_0_4px_#fff]">
+                        {equippedWeapon === 'axe' ? '🪓' : '🗡️'}
+                    </span>
+                </div>
+            )}
             {shield.available && (
               <div className="flex items-center gap-2 text-white transition-opacity"
                 style={{ opacity: shield.cooldown ? 0.6 : 1 }}

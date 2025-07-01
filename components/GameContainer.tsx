@@ -1,8 +1,7 @@
 
 
-
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import type { Controls, Customization, EnemyState, GameState, PlayerState, ProjectileState, AllyState, BossType } from '../types';
+import type { Controls, Customization, EnemyState, GameState, PlayerState, ProjectileState, AllyState, BossType, RedChestUpgradeType } from '../types';
 import { initialPlayerState, BASE_GAME_WIDTH, BASE_GAME_HEIGHT, YUBOKUMIN_DATA } from '../constants';
 
 import Player from './Player';
@@ -14,10 +13,11 @@ import PauseMenu from './PauseMenu';
 import GameOverScreen from './GameOverScreen';
 import DebugMenu from './DebugMenu';
 import UpgradeModal, { UpgradeType } from './UpgradeModal';
-import RedChestUpgradeModal, { RedChestUpgradeType } from './RedChestUpgradeModal';
+import RedChestUpgradeModal from './RedChestUpgradeModal';
 import Shield from './Shield';
 import Sword from './Sword';
 import Bow from './Bow';
+import Axe from './Axe';
 
 interface GameContainerProps {
   controls: Controls;
@@ -32,6 +32,11 @@ interface GameContainerProps {
   onRestart: () => void;
   onRoomChange: (room: number) => void;
 }
+
+const WEAPON_STATS = {
+  sword: { range: 100, cooldown: 300, damage: 1, angleTolerance: Math.PI / 4, animationDuration: 220, swingArc: Math.PI / 2 },
+  axe: { range: 130, cooldown: 600, damage: 1.8, angleTolerance: Math.PI / 3, animationDuration: 500, swingArc: Math.PI * 1.5 }
+};
 
 const GameContainer: React.FC<GameContainerProps> = ({
   controls,
@@ -65,7 +70,8 @@ const GameContainer: React.FC<GameContainerProps> = ({
     bossEncounterCount: { melee: 0, ranged: 0, slowed: 0 },
     resistanceUpTimestamp: 0,
   });
-  const [showAttackEffect, setShowAttackEffect] = useState(false);
+  const [showSwordAttackEffect, setShowSwordAttackEffect] = useState(false);
+  const [showAxeAttackEffect, setShowAxeAttackEffect] = useState(false);
   const [showBowAttackEffect, setShowBowAttackEffect] = useState(false);
   const [showDebugMenu, setShowDebugMenu] = useState(false);
   const [showUpgradeModal, setShowUpgradeModal] = useState(false);
@@ -119,11 +125,26 @@ const GameContainer: React.FC<GameContainerProps> = ({
             statIncreaseText = { text: texts.join(', '), creationTime: Date.now() };
         }
         
+        let pointValue = 0;
+        switch(type) {
+            case 'normal': pointValue = 10; break;
+            case 'shooter': pointValue = 15; break;
+            case 'knight': pointValue = 25; break;
+            case 'knight_shooter': pointValue = 30; break;
+            case 'angel': pointValue = 50; break;
+            case 'angel_shooter': pointValue = 60; break;
+            case 'angel_shield': pointValue = 75; break;
+            default: pointValue = 10;
+        }
+
         const enemy: EnemyState = {
           id: `enemy-${type}-${Date.now()}-${Math.random()}`,
           x, y, hp, damage, type, bossType: null,
           targetId: null,
           statIncreaseText,
+          pointValue,
+          maxHp: hp,
+          hitCount: 0,
         };
 
         if (type.includes('shooter')) enemy.lastShot = 0;
@@ -191,18 +212,21 @@ const GameContainer: React.FC<GameContainerProps> = ({
     const isStage2 = room > 20 && room <= 40;
     const bossInfo = YUBOKUMIN_DATA.find(b => b.type === bossType) || YUBOKUMIN_DATA[0];
 
-    const hpMultiplier = Math.pow(4, encounterCount);
-    const hp = (isStage2 ? bossInfo.maxHp * 2 : bossInfo.maxHp) * hpMultiplier;
+    const hpMultiplier = Math.pow(1.8, encounterCount); // Reduced scaling factor
+    const finalHp = (isStage2 ? bossInfo.maxHp * 2 : bossInfo.maxHp) * hpMultiplier;
     
     const newBoss: EnemyState = {
         id: `boss-${bossType}-${Date.now()}`,
         x: gameDimensions.width / 2 - 25, y: gameDimensions.height / 2 - 25,
-        hp: hp,
+        hp: finalHp,
+        maxHp: finalHp,
         damage: bossInfo.damage,
         type: 'boss',
         bossType: bossInfo.type,
         shieldHits: 0,
         targetId: null,
+        pointValue: bossInfo.pointValue,
+        hitCount: 0,
     };
     return newBoss;
   };
@@ -304,7 +328,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
       let currentEnemies = [...prev.enemies];
       let currentAllies = [...prev.allies];
       const newlySpawnedProjectiles: ProjectileState[] = [];
-      const damageToEnemies: Record<string, number> = {};
+      const damageToEnemies: Record<string, {damage: number, freeze?: number}> = {};
       const shieldDamageToEnemies: Record<string, number> = {};
       const damageToAllies: Record<string, number> = {};
       const { width: gameWidth, height: gameHeight } = prev.gameDimensions;
@@ -341,43 +365,90 @@ const GameContainer: React.FC<GameContainerProps> = ({
       const playerCenterX = newPlayer.x + 15;
       const playerCenterY = newPlayer.y + 15;
 
-      // --- IMMUTABLE AI AND COLLISION LOGIC ---
+       // --- DYNAMIC ATTACK LOGIC ---
+      if (newPlayer.attackState) {
+          const { type, startTime, startAngle, hitEnemies } = newPlayer.attackState;
+          const weaponStats = WEAPON_STATS[type];
+          const progress = (now - startTime) / weaponStats.animationDuration;
+
+          if (progress > 1) {
+              newPlayer.attackState = undefined;
+          } else {
+              // Sword swings from -45 to +45 deg relative to startAngle
+              // Axe swings from -150 to +150
+              const swingStartOffset = type === 'sword' ? -Math.PI / 4 : -Math.PI * (5/6);
+              const currentAngle = startAngle + swingStartOffset + (progress * weaponStats.swingArc);
+
+              currentEnemies.forEach(enemy => {
+                  if (enemy.hp <= 0 || hitEnemies.has(enemy.id)) return;
+                  
+                  const enemySize = enemy.type === 'boss' ? 50 : 30;
+                  const ex = enemy.x + enemySize / 2;
+                  const ey = enemy.y + enemySize / 2;
+                  const distToPlayer = Math.hypot(ex - playerCenterX, ey - playerCenterY);
+                  
+                  if (distToPlayer < weaponStats.range + enemySize / 2) {
+                      const angleToEnemy = Math.atan2(ey - playerCenterY, ex - playerCenterX);
+                      let angleDiff = Math.abs(currentAngle - angleToEnemy);
+                      if (angleDiff > Math.PI) angleDiff = 2 * Math.PI - angleDiff;
+                      
+                      if (angleDiff < weaponStats.angleTolerance) {
+                           if (enemy.type === 'angel_shield' && (enemy.shieldHp ?? 0) > 0) {
+                                shieldDamageToEnemies[enemy.id] = (shieldDamageToEnemies[enemy.id] || 0) + 1;
+                           } else {
+                                const damageDealt = weaponStats.damage * newPlayer.damageMultiplier;
+                                damageToEnemies[enemy.id] = {damage: (damageToEnemies[enemy.id]?.damage || 0) + damageDealt};
+                           }
+                           hitEnemies.add(enemy.id);
+                      }
+                  }
+              });
+          }
+      }
 
       // Ally AI
       currentAllies = currentAllies.map(ally => {
         let updatedAlly = { ...ally };
+        const allySpeed = 1.5 * (newPlayer.speed / initialPlayerState.speed);
         if (updatedAlly.attackState?.isAttacking && now - updatedAlly.attackState.timestamp > 300) {
             updatedAlly.attackState = { ...updatedAlly.attackState, isAttacking: false };
         }
-
+        
         let nearestEnemy: EnemyState | null = null;
-        let minDistance = Infinity;
-
+        let minDistance = 120; // Attack radius
         currentEnemies.forEach(enemy => {
-            if(enemy.hp <= 0) return;
+            if (enemy.hp <= 0) return;
             const dist = Math.hypot((enemy.x + 15) - (updatedAlly.x + 10), (enemy.y + 15) - (updatedAlly.y + 10));
             if (dist < minDistance) {
                 minDistance = dist;
                 nearestEnemy = enemy;
             }
         });
-
+        
         if (nearestEnemy) {
             updatedAlly.targetId = nearestEnemy.id;
             const targetX = nearestEnemy.x + (nearestEnemy.type === 'boss' ? 25 : 15);
             const targetY = nearestEnemy.y + (nearestEnemy.type === 'boss' ? 25 : 15);
-            const allySpeed = 1.5;
-
-            if (minDistance > 25) {
+            
+            if (minDistance > 25) { // If not in attack range, move towards
                 const angle = Math.atan2(targetY - (updatedAlly.y + 10), targetX - (updatedAlly.x + 10));
                 updatedAlly.x += Math.cos(angle) * allySpeed;
                 updatedAlly.y += Math.sin(angle) * allySpeed;
-            } else if (now - updatedAlly.lastAttackTime > updatedAlly.attackCooldown) {
+            } else if (now - updatedAlly.lastAttackTime > updatedAlly.attackCooldown) { // Attack
                 updatedAlly.lastAttackTime = now;
                 updatedAlly.attackState = { isAttacking: true, timestamp: now };
                 const allyDamage = 2 * (2 ** newPlayer.necromancerLevel);
-                damageToEnemies[nearestEnemy.id] = (damageToEnemies[nearestEnemy.id] || 0) + allyDamage;
+                damageToEnemies[nearestEnemy.id] = {damage: (damageToEnemies[nearestEnemy.id]?.damage || 0) + allyDamage};
             }
+        } else {
+            updatedAlly.targetId = null;
+            // Follow player if no enemies
+             const distToPlayer = Math.hypot(playerCenterX - (updatedAlly.x + 10), playerCenterY - (updatedAlly.y + 10));
+             if (distToPlayer > 60) { // Keep a distance
+                 const angle = Math.atan2(playerCenterY - (updatedAlly.y + 10), playerCenterX - (updatedAlly.x + 10));
+                 updatedAlly.x += Math.cos(angle) * allySpeed;
+                 updatedAlly.y += Math.sin(angle) * allySpeed;
+             }
         }
         return updatedAlly;
       });
@@ -385,6 +456,9 @@ const GameContainer: React.FC<GameContainerProps> = ({
       // Enemy AI
       currentEnemies = currentEnemies.map(enemy => {
           let updatedEnemy = {...enemy};
+          if(updatedEnemy.frozenUntil && now < updatedEnemy.frozenUntil) {
+              return updatedEnemy; // Skip AI if frozen
+          }
 
           if (updatedEnemy.statIncreaseText && now - updatedEnemy.statIncreaseText.creationTime > 2000) {
               delete updatedEnemy.statIncreaseText;
@@ -458,7 +532,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
                     if (prev.room >= 25 && prev.room <= 40) damage *= 1.5;
                     projectileSpeed = 3;
                   }
-                  newlySpawnedProjectiles.push({ id: `proj-${now}-${Math.random()}`, x: enemyCenterX - 4, y: enemyCenterY - 4, dx: Math.cos(angleToTarget) * projectileSpeed, dy: Math.sin(angleToTarget) * projectileSpeed, damage, reflected: false, spawnTime: now, source: 'enemy', spellType: null });
+                  newlySpawnedProjectiles.push({ id: `proj-${now}-${Math.random()}`, x: enemyCenterX - 4, y: enemyCenterY - 4, dx: Math.cos(angleToTarget) * projectileSpeed, dy: Math.sin(angleToTarget) * projectileSpeed, damage, reflected: false, spawnTime: now, source: 'enemy', spellType: null, ownerId: updatedEnemy.id });
               }
           }
           updatedEnemy.x = Math.max(0, Math.min(gameWidth - enemySize, updatedEnemy.x));
@@ -497,7 +571,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
                   if (distToEnemy < enemySize / 2) {
                       if (enemy.type === 'angel_shield' && (enemy.shieldHp ?? 0) > 0) {
                           if (proj.spellType === 'arrow' && newPlayer.piercingArrows) {
-                              damageToEnemies[enemy.id] = (damageToEnemies[enemy.id] || 0) + 3;
+                              damageToEnemies[enemy.id] = {damage:(damageToEnemies[enemy.id]?.damage || 0) + 3};
                               shieldDamageToEnemies[enemy.id] = 1;
                               // piercing arrow continues
                           } else {
@@ -516,7 +590,11 @@ const GameContainer: React.FC<GameContainerProps> = ({
                           } else projectileConsumed = true;
                           
                           const damageDealt = proj.reflected ? newPlayer.damageMultiplier : proj.damage;
-                          damageToEnemies[enemy.id] = (damageToEnemies[enemy.id] || 0) + damageDealt;
+                          damageToEnemies[enemy.id] = {damage: (damageToEnemies[enemy.id]?.damage || 0) + damageDealt};
+                          if(proj.spellType === 'ice') {
+                              damageToEnemies[enemy.id].freeze = 3000;
+                          }
+
                           if (proj.spellType === 'arrow' && !proj.reflected) {
                               const speed = Math.hypot(proj.dx, proj.dy);
                               if (speed > 0) pushToEnemies[enemy.id] = { x: (proj.dx / speed) * 160, y: (proj.dy / speed) * 160 };
@@ -541,20 +619,24 @@ const GameContainer: React.FC<GameContainerProps> = ({
           if (!projectileConsumed) finalProjectiles.push(proj);
       }
       
-      // Apply projectile damage and push effects
+      // Apply projectile damage and effects
       currentEnemies = currentEnemies.map(e => {
-          const hpDmg = damageToEnemies[e.id] || 0;
+          const effects = damageToEnemies[e.id];
           const shieldDmg = shieldDamageToEnemies[e.id] || 0;
           const push = pushToEnemies[e.id];
-          if (hpDmg === 0 && shieldDmg === 0 && !push) return e;
+          if (!effects && shieldDmg === 0 && !push) return e;
           
-          let { hp, shieldHp, x, y } = e;
-          hp -= hpDmg;
+          let { hp, shieldHp, x, y, frozenUntil, hitCount } = e;
+          if (effects) {
+              hp -= effects.damage;
+              if (effects.freeze) frozenUntil = now + effects.freeze;
+              hitCount = (hitCount || 0) + 1;
+          }
           if (shieldHp !== undefined && shieldDmg > 0) shieldHp -= shieldDmg;
           if (push) { x += push.x; y += push.y; }
 
           if (hp <= 0 && e.hp > 0) enemiesKilledThisFrame.add(e.id);
-          return { ...e, hp, shieldHp, x, y };
+          return { ...e, hp, shieldHp, x, y, frozenUntil, hitCount };
       });
 
       // Contact/Melee damage
@@ -564,6 +646,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
 
       if (now - prev.lastDmg > prev.dmgCD) {
         currentEnemies.forEach(enemy => {
+          if (enemy.frozenUntil && now < enemy.frozenUntil) return;
           const isMelee = !enemy.type.includes('shooter') && (!enemy.type.includes('boss') || (enemy.bossType === 'melee' || enemy.bossType === 'slowed'));
           if (!isMelee || !enemy.targetId || enemy.hp <= 0) return;
           if (enemy.type === 'angel_shield' && (enemy.shieldHp ?? 0) > 0) {
@@ -611,7 +694,9 @@ const GameContainer: React.FC<GameContainerProps> = ({
         if (playerDamageThisFrame > 0) {
             if (Math.random() * 100 < newPlayer.knowledge) { /* no-op */ } 
             else if (Math.random() * 100 < newPlayer.renegade) {
-                currentEnemies.forEach(e => { damageToEnemies[e.id] = (damageToEnemies[e.id] || 0) + playerDamageThisFrame; });
+                 Object.keys(damageToEnemies).forEach(enemyId => {
+                    damageToEnemies[enemyId].damage = (damageToEnemies[enemyId]?.damage || 0) + playerDamageThisFrame;
+                });
             } else {
                 const damageReduction = 1 - Math.min(0.9, newPlayer.resistance * 0.05);
                 newPlayer.lives -= playerDamageThisFrame * damageReduction;
@@ -656,6 +741,10 @@ const GameContainer: React.FC<GameContainerProps> = ({
       let redChestPosition = prev.redChestPosition;
 
       if (finalEnemies.length === 0 && prev.enemies.length > 0) {
+          if (prev.room === 20 && !newPlayer.hasAxe) {
+              newPlayer.hasAxe = true;
+          }
+
           const wasBossRoom = prev.enemies.some(e => e.type === 'boss');
           if (wasBossRoom) {
               chest = 'normal';
@@ -673,101 +762,32 @@ const GameContainer: React.FC<GameContainerProps> = ({
   }, [controls, onGameOver, isGameOver]);
 
   const handleAttack = useCallback(() => {
-    setShowAttackEffect(true);
-    setTimeout(() => setShowAttackEffect(false), 220);
-
     setGameState(prev => {
-        let newPlayerState = {...prev.player};
+        const now = Date.now();
+        if (prev.player.attackState) return prev;
+
+        const weapon = prev.player.equippedWeapon;
+        const weaponStats = WEAPON_STATS[weapon];
         
-        const px = prev.player.x + 15;
-        const py = prev.player.y + 15;
-        const attackRange = 100;
-        const angleTolerance = Math.PI / 9;
-        
-        const updatedEnemies = prev.enemies.map(enemy => {
-            let newEnemy = {...enemy};
-            const ex = newEnemy.x + (newEnemy.type === 'boss' ? 25 : 15);
-            const ey = newEnemy.y + (newEnemy.type === 'boss' ? 25 : 15);
-            const dx = ex - px;
-            const dy = ey - py;
-            const distance = Math.hypot(dx, dy);
-
-            if (distance <= attackRange) {
-                const enemyAngle = Math.atan2(dy, dx);
-                let diff = Math.abs(enemyAngle - prev.player.attackAngle);
-                if (diff > Math.PI) diff = 2 * Math.PI - diff;
-
-                if (diff < angleTolerance) {
-                    if (newEnemy.type === 'angel_shield' && (newEnemy.shieldHp ?? 0) > 0) {
-                        newEnemy.shieldHp = 0;
-                    } else {
-                        newEnemy.hp -= 1 * prev.player.damageMultiplier;
-                    }
-                }
-            }
-            return newEnemy;
-        });
-
-        let newKills = prev.kills;
-        const enemiesKilledThisFrame = new Set<string>();
-        updatedEnemies.forEach(e => {
-            const oldEnemy = prev.enemies.find(oe => oe.id === e.id);
-            if (e.hp <= 0 && oldEnemy && oldEnemy.hp > 0) {
-                enemiesKilledThisFrame.add(e.id);
-            }
-        });
-        
-        newKills += enemiesKilledThisFrame.size;
-
-        let bossesKilledCount = 0;
-        enemiesKilledThisFrame.forEach((killedId) => {
-            const killedEnemy = prev.enemies.find(e => e.id === killedId);
-            if (killedEnemy?.type === 'boss') {
-                bossesKilledCount++;
-            }
-            const arrowDropChance = newPlayerState.luck ? 0.65 : 0.25;
-            if(newPlayerState.hasBow && newPlayerState.arrows < prev.player.maxArrows && Math.random() < arrowDropChance) {
-                newPlayerState.arrows++;
-            }
-        });
-
-        if (bossesKilledCount > 0) {
-            const damageBonus = 0.12 * bossesKilledCount;
-            newPlayerState.damageMultiplier += damageBonus;
-            newPlayerState.damageUpTimestamp = Date.now();
-            newPlayerState.damageUpValue = damageBonus;
+        if (weapon === 'sword') {
+            setShowSwordAttackEffect(true);
+            setTimeout(() => setShowSwordAttackEffect(false), weaponStats.animationDuration);
+        } else if (weapon === 'axe') {
+            setShowAxeAttackEffect(true);
+            setTimeout(() => setShowAxeAttackEffect(false), weaponStats.animationDuration);
         }
 
-        const remainingEnemies = updatedEnemies.filter(e => e.hp > 0);
-        const wasBossRoom = prev.enemies.some(e => e.type === 'boss');
-        const allBossesKilled = wasBossRoom && !remainingEnemies.some(e => e.type === 'boss');
-
-        let chest = prev.chest;
-        let blueChestPosition = prev.blueChestPosition;
-        let bowChestPosition = prev.bowChestPosition;
-        let redChestPosition = prev.redChestPosition;
-
-        if (remainingEnemies.length === 0 && prev.enemies.length > 0) {
-            if (allBossesKilled) {
-                chest = 'normal';
-                if (!prev.shield.available) {
-                    blueChestPosition = { x: 10, y: prev.gameDimensions.height - 50 };
-                }
-            } else if (!wasBossRoom) {
-                chest = 'normal';
+        const newPlayerState = { 
+            ...prev.player,
+            attackState: {
+                type: weapon,
+                startTime: now,
+                startAngle: prev.player.aimAngle,
+                hitEnemies: new Set<string>()
             }
+        };
 
-            if (prev.room === 15 && !newPlayerState.hasBow) {
-              bowChestPosition = { x: prev.gameDimensions.width - 42, y: prev.gameDimensions.height / 2 - 14 };
-            }
-            if (prev.room % 2 === 0 && prev.room > 0) {
-                redChestPosition = {x: 20, y: prev.gameDimensions.height / 2 - 14};
-            }
-        }
-        
-        const doorOpen = remainingEnemies.length === 0 && !chest && !blueChestPosition && !bowChestPosition && !redChestPosition;
-
-        return {...prev, player: newPlayerState, enemies: remainingEnemies, kills: newKills, doorOpen, chest, blueChestPosition, bowChestPosition, redChestPosition };
+        return { ...prev, player: newPlayerState };
     });
   }, []);
   
@@ -816,6 +836,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
                     targetId: null,
                     attackCooldown: 1500, // ms
                     lastAttackTime: 0,
+                    ownerId: 'player',
                 });
             }
             return {
@@ -828,19 +849,20 @@ const GameContainer: React.FC<GameContainerProps> = ({
         // Projectile spells (fire, ice)
         let damage = 0;
         if (spell === 'fire') damage = 5;
-        if (spell === 'ice') damage = 15;
+        if (spell === 'ice') damage = 2; // Damage changed to 2
         
         const newProjectile: ProjectileState = {
             id: `player-proj-${Date.now()}`,
             x: p.player.x + 11, // center of player
             y: p.player.y + 11,
-            dx: Math.cos(p.player.attackAngle) * 5,
-            dy: Math.sin(p.player.attackAngle) * 5,
+            dx: Math.cos(p.player.aimAngle) * 5,
+            dy: Math.sin(p.player.aimAngle) * 5,
             damage,
             reflected: false,
             spawnTime: Date.now(),
             source: 'player',
-            spellType: spell
+            spellType: spell,
+            ownerId: 'player'
         };
 
         return {
@@ -865,13 +887,14 @@ const GameContainer: React.FC<GameContainerProps> = ({
             id: `arrow-${Date.now()}`,
             x: p.player.x + 11,
             y: p.player.y + 11,
-            dx: Math.cos(p.player.attackAngle) * 6,
-            dy: Math.sin(p.player.attackAngle) * 6,
-            damage: 2.5,
+            dx: Math.cos(p.player.aimAngle) * 6,
+            dy: Math.sin(p.player.aimAngle) * 6,
+            damage: 5,
             reflected: false,
             spawnTime: Date.now(),
             source: 'player',
-            spellType: 'arrow' as const
+            spellType: 'arrow' as const,
+            ownerId: 'player'
         };
         
         if (p.player.piercingArrows) {
@@ -895,6 +918,15 @@ const GameContainer: React.FC<GameContainerProps> = ({
     });
   }, []);
 
+  const handleSwitchWeapon = useCallback(() => {
+    setGameState(p => {
+        if (!p.player.hasAxe) return p;
+        const newWeapon = p.player.equippedWeapon === 'sword' ? 'axe' : 'sword';
+        return { ...p, player: { ...p.player, equippedWeapon: newWeapon } };
+    });
+  }, []);
+
+
   const handleMouseMove = (e: React.MouseEvent<HTMLDivElement>) => {
     if (!gameContainerRef.current) return;
     const rect = gameContainerRef.current.getBoundingClientRect();
@@ -906,7 +938,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
     const playerCenterYInGame = gameState.player.y + 15;
     
     const angle = Math.atan2(mouseYInGame - playerCenterYInGame, mouseXInGame - playerCenterXInGame);
-    setGameState(p => ({ ...p, player: { ...p.player, attackAngle: angle }, shield: {...p.shield, angle: angle} }));
+    setGameState(p => ({ ...p, player: { ...p.player, aimAngle: angle }, shield: {...p.shield, angle: angle} }));
   };
   
   const tryActivateShield = useCallback(() => {
@@ -1008,6 +1040,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
       if (key === controls.magic.toLowerCase()) handleMagicCast();
       if (key === controls.fireBow.toLowerCase()) handleFireBow();
       if (key === controls.switchMagic.toLowerCase()) handleSwitchMagic();
+      if (key === controls.switchWeapon.toLowerCase()) handleSwitchWeapon();
       if (key === 'g' && keysPressed.current['h']) setShowDebugMenu(prev => !prev);
     };
     const handleKeyUp = (e: KeyboardEvent) => {
@@ -1022,7 +1055,7 @@ const GameContainer: React.FC<GameContainerProps> = ({
       window.removeEventListener('keyup', handleKeyUp);
       if (shieldIntervalRef.current) clearInterval(shieldIntervalRef.current);
     };
-  }, [controls, handleAttack, tryActivateShield, handleMagicCast, handleFireBow, handleSwitchMagic]);
+  }, [controls, handleAttack, tryActivateShield, handleMagicCast, handleFireBow, handleSwitchMagic, handleSwitchWeapon]);
 
   useEffect(() => {
     if (!isPaused && !isGameOver) {
@@ -1059,6 +1092,8 @@ const GameContainer: React.FC<GameContainerProps> = ({
         shieldCooldownTimer={shieldCooldownTimer}
         hasBow={gameState.player.hasBow}
         arrows={gameState.player.arrows}
+        hasAxe={gameState.player.hasAxe}
+        equippedWeapon={gameState.player.equippedWeapon}
       />
       
       <div className="absolute top-2.5 left-1/2 -translate-x-1/2 z-30 flex gap-2">
@@ -1085,8 +1120,9 @@ const GameContainer: React.FC<GameContainerProps> = ({
         >
           <Player playerState={gameState.player} customization={customization} showResistanceUp={Date.now() - gameState.resistanceUpTimestamp < 2000} />
           <Shield shieldState={gameState.shield} playerState={gameState.player} />
-          <Sword show={showAttackEffect} angle={gameState.player.attackAngle} playerPosition={gameState.player} />
-          <Bow show={showBowAttackEffect} angle={gameState.player.attackAngle} playerPosition={gameState.player} />
+          <Sword show={showSwordAttackEffect} angle={gameState.player.aimAngle} playerPosition={gameState.player} />
+          <Axe show={showAxeAttackEffect} angle={gameState.player.aimAngle} playerPosition={gameState.player} />
+          <Bow show={showBowAttackEffect} angle={gameState.player.aimAngle} playerPosition={gameState.player} />
 
 
           {gameState.enemies.map(enemy => <Enemy key={enemy.id} enemyState={enemy} />)}

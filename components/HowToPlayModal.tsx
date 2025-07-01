@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { initialControls, YUBOKUMIN_DATA } from '../constants';
 
@@ -54,7 +55,7 @@ const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onClose }) => {
         
         <div className="overflow-y-auto pr-4 flex-grow">
             <SectionTitle>O Objetivo</SectionTitle>
-            <p>Seu objetivo é sobreviver o maior número de salas possível, derrotando todos os inimigos em cada uma para avançar. O jogo possui 60 salas divididas em 3 estágios, cada um com inimigos mais fortes. A cada 5 salas, um ou mais chefes aparecerão.</p>
+            <p>Seu objetivo é sobreviver o maior número de salas possível (Modo Clássico) ou ondas de inimigos (Modo Onda), derrotando todos em cada uma para avançar. O Modo Clássico possui 60 salas divididas em 3 estágios. A cada 5 salas, um ou mais chefes aparecerão.</p>
         
             <SectionTitle>Controles Padrão</SectionTitle>
             <div className="grid grid-cols-2 gap-x-8 gap-y-2">
@@ -63,7 +64,8 @@ const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onClose }) => {
                 <p>Mover para Esquerda: <Key>{initialControls.left.toUpperCase()}</Key></p>
                 <p>Mover para Direita: <Key>{initialControls.right.toUpperCase()}</Key></p>
                 <p>Correr: <Key>{initialControls.run}</Key></p>
-                <p>Atacar (Espada): <Key>Espaço</Key></p>
+                <p>Atacar (Arma Principal): <Key>Espaço</Key></p>
+                <p>Trocar Arma Principal: <Key>{initialControls.switchWeapon.toUpperCase()}</Key></p>
                 <p>Escudo: <Key>{initialControls.shield.toUpperCase()}</Key></p>
                 <p>Disparar Arco: <Key>{initialControls.fireBow.toUpperCase()}</Key></p>
                 <p>Usar Magia: <Key>{initialControls.magic.toUpperCase()}</Key></p>
@@ -72,37 +74,41 @@ const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onClose }) => {
             </div>
             
             <SectionTitle>Atributos (Baús Normais)</SectionTitle>
-            <p>Após limpar uma sala de inimigos comuns, um baú de tesouro aparece, oferecendo uma escolha entre quatro atributos básicos.</p>
-            <AttributeItem title="+50% Dano" description="Aumenta o dano do seu ataque de espada." />
-            <AttributeItem title="+0.5 Regeneração/s" description="Recupera vida lentamente. Máximo de 2/s." />
-            <AttributeItem title="+20% Velocidade" description="Aumenta sua velocidade de movimento e corrida." />
-            <AttributeItem title="+0.5 Vida Máxima" description="Aumenta sua vida máxima e atual permanentemente." />
+            <p>No Modo Clássico, após limpar uma sala, um baú oferece uma escolha de atributos. No Modo Onda, estes podem ser comprados ou encontrados em baús e podem incluir opções exclusivas.</p>
+            <AttributeItem title="Dano (+50% Clássico / +20% Onda)" description="Aumenta o dano do seu ataque." />
+            <AttributeItem title="Regeneração (+0.5 Clássico / +0.25 Onda)" description="Recupera vida lentamente. Máximo de 2/s." />
+            <AttributeItem title="Velocidade (+20% Clássico / +10% Onda)" description="Move-se mais rapidamente." />
+            <AttributeItem title="Vida Máxima (+0.5 Clássico / +1 Onda)" description="Aumenta sua vida máxima permanentemente." />
+            <AttributeItem title="Recarga de Estamina +50% (Exclusivo Modo Onda)" description="Aumenta a velocidade de recuperação de estamina." />
+            <AttributeItem title="Recarga de Mana +50% (Exclusivo Modo Onda)" description="Aumenta a velocidade de recuperação de mana." />
+
 
             <SectionTitle>Poderes (Baús Vermelhos)</SectionTitle>
-            <p>A cada duas salas, um baú vermelho especial aparece, oferecendo poderes únicos e passivos que mudam drasticamente sua forma de jogar.</p>
-            <AttributeItem title="Conhecimento" description="Dá uma pequena chance de ignorar completamente o dano recebido." />
-            <AttributeItem title="Renegado" description="Dá uma pequena chance de refletir o dano que você recebe para todos os inimigos na tela." />
-            <AttributeItem title="Resistência" description="Melhora seu escudo, aumentando a duração e diminuindo a recarga." />
-            <AttributeItem title="Corredor" description="Aumenta sua estamina máxima, permitindo que você corra por mais tempo." />
+            <p>A cada duas salas (ou comprado na loja do Modo Onda), um baú vermelho especial aparece, oferecendo poderes únicos e passivos que mudam drasticamente sua forma de jogar.</p>
+            <AttributeItem title="Conhecimento" description="Dá uma chance de ignorar completamente o dano recebido. No Modo Onda, também tem chance de refletir 100% do dano de volta." />
+            <AttributeItem title="Renegado" description="Dá uma chance de refletir o dano que você recebe para todos os inimigos na tela." />
+            <AttributeItem title="Resistência" description="Melhora seu escudo. No Modo Onda, dobra a duração do escudo de habilidade." />
+            <AttributeItem title="Corredor" description="Aumenta sua estamina máxima. O bônus é maior no Modo Onda." />
             <AttributeItem title="Sorte" description="Aumenta a chance de inimigos derrubarem flechas e o número de inimigos no Estágio 2." />
-            <AttributeItem title="Flecha Perfurante" description="Suas flechas atravessam múltiplos inimigos, causando dano e empurrando-os." />
+            <AttributeItem title="Flecha Perfurante" description="Suas flechas atravessam múltiplos inimigos. No modo Onda, causa dano massivo e perfura mais inimigos." />
             <AttributeItem title="Economia de Mana" description="Reduz o custo de mana de todas as magias." />
             <AttributeItem title="Necromante (Upgrade)" description="Fortalece seus esqueletos invocados, aumentando a vida, dano e o número de aliados." />
+            <AttributeItem title="Pinguin Rico (Modo Onda)" description="Melhora a magia Explosão, dobrando seu raio e dano." />
             
             <SectionTitle>Magia e Poderes</SectionTitle>
             <p>O atributo "Magia" (de baús vermelhos) desbloqueia uma barra de mana e novos feitiços. Você pode alternar entre os feitiços aprendidos com a tecla <Key>T</Key>.</p>
             <SubTitle>🔥 Fogo</SubTitle>
             <p>Desbloqueado com 10 de Magia. Dispara uma bola de fogo que causa dano moderado.</p>
             <SubTitle>❄️ Gelo</SubTitle>
-            <p>Desbloqueado com 20 de Magia. Dispara um projétil de gelo que causa dano alto.</p>
+            <p>Desbloqueado com 20 de Magia. Dispara um projétil de gelo que causa dano e congela inimigos por um curto período.</p>
             <SubTitle>💀 Necromante</SubTitle>
             <p>Desbloqueado com 30 de Magia. Usa toda a sua mana para invocar 3 esqueletos aliados que lutam por você. Pode ser aprimorado com o poder "Necromante" do baú vermelho.</p>
             <SubTitle>💖 Bênção</SubTitle>
-            <p>Desbloqueado com 35 de Magia. Este poder divino tem dois estágios, consome toda a sua estamina (não usa mana) e tem 45s de recarga.</p>
-            <ul className="list-disc list-inside text-gray-300 ml-4">
-                <li><b>Primeiro Uso:</b> Aumenta sua vida máxima para 30 permanentemente.</li>
-                <li><b>Usos Seguintes:</b> Ativa uma poderosa regeneração de 3.5 vida/segundo por 5 segundos.</li>
-            </ul>
+            <p>Desbloqueado com 35 de Magia. Este poder divino consome toda a sua estamina e tem uma longa recarga. No Modo Clássico, aumenta sua vida máxima permanentemente e depois concede regeneração intensa. No Modo Onda, cura instantaneamente 5 de vida para todos os aliados na partida.</p>
+             <SubTitle>💥 Explosão (Modo Onda)</SubTitle>
+            <p>Desbloqueado com 40 de Magia. Dispara um projétil que, ao atingir um inimigo, cria uma área de dano contínuo. Pode ser aprimorado com 'Pinguin Rico'.</p>
+            <SubTitle>🔵 Escudo Mágico (Modo Onda)</SubTitle>
+            <p>Desbloqueado com 45 de Magia. Cria uma barreira protetora que bloqueia projéteis e empurra inimigos, consumindo mana ao longo do tempo.</p>
 
             <SectionTitle>Estágios & Inimigos</SectionTitle>
             <div>
@@ -128,10 +134,12 @@ const HowToPlayModal: React.FC<HowToPlayModalProps> = ({ onClose }) => {
 
 
             <SectionTitle>Itens e Habilidades</SectionTitle>
+            <SubTitle>🗡️ Machado de Batalha</SubTitle>
+            <p>Você obterá um Machado de Batalha ao completar a sala 20. Pressione <Key>E</Key> para alternar entre a Espada e o Machado. O machado é mais lento, mas causa mais dano e tem um alcance maior, ideal para acertar múltiplos inimigos.</p>
             <SubTitle>🛡️ Escudo</SubTitle>
-            <p>Você pode encontrar o escudo em um baú azul após derrotar o primeiro chefe. Uma vez adquirido, pressione <Key>R</Key> para ativá-lo. O escudo bloqueia ataques corpo a corpo e reflete projéteis. Ele tem um tempo de uso e recarga. O upgrade 'Resistente' de baús vermelhos melhora a duração e a recarga do escudo.</p>
+            <p>No Modo Clássico, encontrado em um baú azul. Uma vez adquirido, pressione <Key>R</Key> para ativá-lo. O escudo bloqueia ataques corpo a corpo e reflete projéteis. No Modo Onda, ele dura 5 segundos com 2 segundos de recarga e colide com inimigos, empurrando-os.</p>
             <SubTitle>🏹 Arco e Flecha</SubTitle>
-            <p>Disponível em um baú especial na sala 15. Use <Key>F</Key> para disparar uma flecha. Flechas são limitadas e podem ser recuperadas ao derrotar inimigos. O upgrade 'Flecha Perfurante' permite que suas flechas atravessem múltiplos inimigos.</p>
+            <p>Disponível em um baú na sala 15. Use <Key>F</Key> para disparar uma flecha de alto dano (dano base 5). Flechas são limitadas e podem ser recuperadas ao derrotar inimigos.</p>
         </div>
       </div>
     </div>

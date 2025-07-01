@@ -1,28 +1,44 @@
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 
-export type UpgradeType = 'damage' | 'regen' | 'speed' | 'maxHealth';
-
-const UPGRADES: { type: UpgradeType; title: string; description: string }[] = [
-  { type: 'damage', title: '+50% Dano', description: 'Aumenta o dano do seu ataque.' },
-  { type: 'regen', title: '+0.5 Regeneração/s', description: 'Recupera vida lentamente. Máximo de 2/s.' },
-  { type: 'speed', title: '+20% Velocidade', description: 'Move-se mais rapidamente pelo dungeon.' },
-  { type: 'maxHealth', title: '+0.5 Vida Máxima', description: 'Aumenta sua vida máxima permanentemente.' },
-];
+export type UpgradeType = 'damage' | 'regen' | 'speed' | 'maxHealth' | 'staminaRecharge' | 'manaRecharge';
 
 interface UpgradeModalProps {
   onConfirm: (upgrade: UpgradeType) => void;
+  isWaveMode?: boolean;
 }
 
-const UpgradeModal: React.FC<UpgradeModalProps> = ({ onConfirm }) => {
+const UpgradeModal: React.FC<UpgradeModalProps> = ({ onConfirm, isWaveMode = false }) => {
   const [selected, setSelected] = useState<UpgradeType | null>(null);
+  const [options, setOptions] = useState<{ type: UpgradeType; title: string; description: string }[]>([]);
+
+  useEffect(() => {
+    const baseUpgrades: { type: UpgradeType; title: string; description: string }[] = [
+      { type: 'damage', title: isWaveMode ? '+20% Dano' : '+50% Dano', description: 'Aumenta o dano de seus ataques.' },
+      { type: 'regen', title: isWaveMode ? '+0.25 Regeneração/s' : '+0.5 Regeneração/s', description: 'Recupera vida lentamente. Máximo de 2/s.' },
+      { type: 'speed', title: isWaveMode ? '+10% Velocidade' : '+20% Velocidade', description: 'Move-se mais rapidamente.' },
+      { type: 'maxHealth', title: isWaveMode ? '+1 Vida Máxima' : '+0.5 Vida Máxima', description: 'Aumenta sua vida máxima permanentemente.' },
+    ];
+
+    if (isWaveMode) {
+      const waveExclusiveUpgrades: { type: UpgradeType; title: string; description: string }[] = [
+        { type: 'staminaRecharge', title: '+50% Recarga de Estamina', description: 'Recupera estamina 50% mais rápido.' },
+        { type: 'manaRecharge', title: '+50% Recarga de Mana', description: 'Recupera mana 50% mais rápido.' },
+      ];
+      const allWaveOptions = [...baseUpgrades, ...waveExclusiveUpgrades];
+      const shuffled = allWaveOptions.sort(() => 0.5 - Math.random());
+      setOptions(shuffled.slice(0, 4));
+    } else {
+      setOptions(baseUpgrades);
+    }
+  }, [isWaveMode]);
 
   return (
     <div className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center">
       <div className="bg-[#5c432c] p-8 border-4 border-[#493d2a] text-center rounded-lg shadow-xl w-[500px]">
         <h2 className="text-3xl mb-6 font-bold text-white">Escolha um Atributo</h2>
         <div className="grid grid-cols-2 gap-4 mb-8">
-          {UPGRADES.map(upgrade => (
+          {options.map(upgrade => (
             <button
               key={upgrade.type}
               onClick={() => setSelected(upgrade.type)}

@@ -1,3 +1,4 @@
+
 import React from 'react';
 import type { GameState, EnemyState, PlayerState, BossType } from '../types';
 import { BASE_GAME_WIDTH, BASE_GAME_HEIGHT, YUBOKUMIN_DATA } from '../constants';
@@ -19,16 +20,16 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
 
   const debugSpawnEnemy = (type: 'normal' | 'shooter' | 'knight' | 'knight_shooter' | 'angel' | 'angel_shooter' | 'angel_shield') => {
     setGameState(p => {
-      let damage, hp, shieldHp;
+      let damage, hp, shieldHp, pointValue;
       switch(type) {
-        case 'normal': damage = 0.5; hp = 3; break;
-        case 'shooter': damage = 1; hp = 3; break;
-        case 'knight': damage = 4; hp = 12; break;
-        case 'knight_shooter': damage = 3.5; hp = 12; break;
-        case 'angel': damage = 12; hp = 36; break;
-        case 'angel_shooter': damage = 8; hp = 30; break;
-        case 'angel_shield': damage = 2; hp = 4; shieldHp = 1; break;
-        default: damage = 1; hp = 3;
+        case 'normal': damage = 0.5; hp = 3; pointValue = 10; break;
+        case 'shooter': damage = 1; hp = 3; pointValue = 15; break;
+        case 'knight': damage = 4; hp = 12; pointValue = 25; break;
+        case 'knight_shooter': damage = 3.5; hp = 12; pointValue = 30; break;
+        case 'angel': damage = 12; hp = 36; pointValue = 50; break;
+        case 'angel_shooter': damage = 8; hp = 30; pointValue = 60; break;
+        case 'angel_shield': damage = 2; hp = 4; shieldHp = 1; pointValue = 75; break;
+        default: damage = 1; hp = 3; pointValue = 10;
       }
       
       const newEnemy: EnemyState = {
@@ -42,6 +43,7 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
         lastShot: type.includes('shooter') ? 0 : undefined,
         shieldHp: shieldHp,
         targetId: null,
+        pointValue: pointValue,
       };
       return {
         ...p,
@@ -62,6 +64,7 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
         bossType: bossInfo.type,
         shieldHits: 0,
         targetId: null,
+        pointValue: bossInfo.pointValue
      };
      setGameState(p => ({
          ...p,
@@ -90,7 +93,7 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
     const isStage3 = room > 40;
     const newEnemies: EnemyState[] = [];
     
-    const createEnemy = (type: EnemyState['type'], x: number, y: number, baseHp: number, baseDamage: number): EnemyState => {
+    const createEnemy = (type: EnemyState['type'], x: number, y: number, baseHp: number, baseDamage: number, pointValue: number): EnemyState => {
         let hp = baseHp;
         let damage = baseDamage;
         
@@ -98,6 +101,7 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
           id: `enemy-${type}-${Date.now()}-${Math.random()}`,
           x, y, hp, damage, type, bossType: null,
           targetId: null,
+          pointValue
         };
 
         if (type.includes('shooter')) enemy.lastShot = 0;
@@ -107,7 +111,7 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
     };
 
     if (room === 13) {
-      newEnemies.push(createEnemy('angel_shield', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 4, 2));
+      newEnemies.push(createEnemy('angel_shield', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 4, 2, 75));
     }
 
     if (isStage3) {
@@ -117,11 +121,11 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
         const x = Math.random() * (gameDimensions.width - 30);
         const y = Math.random() * (gameDimensions.height - 30);
         if (rand < 0.33) {
-          newEnemies.push(createEnemy('angel', x, y, 36, 12));
+          newEnemies.push(createEnemy('angel', x, y, 36, 12, 50));
         } else if (rand < 0.66) {
-          newEnemies.push(createEnemy('angel_shooter', x, y, 30, 8));
+          newEnemies.push(createEnemy('angel_shooter', x, y, 30, 8, 60));
         } else {
-          newEnemies.push(createEnemy('angel_shield', x, y, 4, 2));
+          newEnemies.push(createEnemy('angel_shield', x, y, 4, 2, 75));
         }
       }
     } else if (isStage2) {
@@ -142,19 +146,19 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
       }
       
       for (let i = 0; i < knightsCount; i++) {
-        newEnemies.push(createEnemy('knight', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 12, 4));
+        newEnemies.push(createEnemy('knight', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 12, 4, 25));
       }
       for (let i = 0; i < knightShootersCount; i++) {
-        newEnemies.push(createEnemy('knight_shooter', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 12, 3.5));
+        newEnemies.push(createEnemy('knight_shooter', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 12, 3.5, 30));
       }
     } else { // Stage 1
       const count = Math.floor(Math.random() * 3) + 3;
       for (let i = 0; i < count; i++) {
         const isShooter = Math.random() < 0.2;
         if(isShooter) {
-            newEnemies.push(createEnemy('shooter', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 3, 1));
+            newEnemies.push(createEnemy('shooter', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 3, 1, 15));
         } else {
-            newEnemies.push(createEnemy('normal', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 3, 0.5));
+            newEnemies.push(createEnemy('normal', Math.random() * (gameDimensions.width - 30), Math.random() * (gameDimensions.height - 30), 3, 0.5, 10));
         }
       }
     }
@@ -239,6 +243,7 @@ const DebugMenu: React.FC<DebugMenuProps> = ({ setGameState }) => {
         <div className="grid grid-cols-2 gap-2">
           <DebugButton onClick={() => setGameState(p => ({...p, player: {...p.player, hasBow: true}}))}>Pegar Arco</DebugButton>
           <DebugButton onClick={() => setGameState(p => ({...p, player: {...p.player, arrows: p.player.maxArrows}}))}>Max Flechas</DebugButton>
+          <DebugButton onClick={() => setGameState(p => ({...p, player: {...p.player, hasAxe: true}}))}>Pegar Machado</DebugButton>
           <DebugButton onClick={() => setGameState(p => ({ ...p, player: { ...p.player, resistance: p.player.resistance + 1 }, resistanceUpTimestamp: Date.now() }))}>+Resistência</DebugButton>
           <DebugButton onClick={() => setGameState(p => ({...p, player: {...p.player, magic: p.player.magic + 10, maxMana: p.player.maxMana + 20, mana: p.player.mana + 20}}))}>+Magia</DebugButton>
           <DebugButton onClick={() => setGameState(p => ({...p, player: {...p.player, luck: true}}))}>+Sorte</DebugButton>

@@ -1,10 +1,9 @@
-
 import React from 'react';
-import type { GameState } from '../types';
+import type { GameState, PlayerState } from '../types';
 
 interface ShieldProps {
   shieldState: GameState['shield'];
-  playerState: GameState['player'];
+  playerState: PlayerState;
 }
 
 const Shield: React.FC<ShieldProps> = ({ shieldState, playerState }) => {

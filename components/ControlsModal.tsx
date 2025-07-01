@@ -72,6 +72,7 @@ const ControlsModal: React.FC<ControlsModalProps> = ({ controls, onSave, onClose
         {createControlEditor('right', 'Mover para direita')}
         {createControlEditor('run', 'Correr')}
         {createControlEditor('attack', 'Atacar')}
+        {createControlEditor('switchWeapon', 'Trocar Arma')}
         {createControlEditor('shield', 'Escudo')}
         {createControlEditor('magic', 'Usar Magia')}
         {createControlEditor('switchMagic', 'Trocar Magia')}
